@@ -4,8 +4,8 @@ Mo webcam, xem truoc, va chup anh luu lai de dung cho verify_calibration.py
 (hoac de chup anh calibration/san pham cho cac buoc sau).
 
 Cach dung:
-    python src/capture_webcam.py --output test.jpg
-    python src/capture_webcam.py --output data/calibration_test/ --prefix calib --width 1280 --height 720
+    python tests/capture_webcam.py --output test.jpg
+    python tests/capture_webcam.py --output data/calibration_test/ --prefix calib --width 1280 --height 720
 
 Phim tat khi cua so preview dang mo:
     SPACE hoac C   -> chup va luu anh

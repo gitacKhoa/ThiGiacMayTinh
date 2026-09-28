@@ -4,7 +4,7 @@ Kiem chung lai ket qua camera calibration (mtx, dist) truoc khi dung cho
 cac buoc sau (homography, segmentation, edge detection...).
 
 Cach dung:
-    python src/verify_calibration.py --calib outputs/calibration_results/calibration_data.pkl --image data/calibration_test/calib_000.jpg --crop --output outputs/undistort_check.png
+    python src/verify_calibration.py --calib outputs/calibration_results/calibration_data.pkl --image data/calibration_test/calib_000.jpg --output outputs/undistort_check.png
     python src/verify_calibration.py --calib outputs/calibration_results/calibration_data.npz --image data/calibration_test/calib_000.jpg --grid --crop
 """
 
