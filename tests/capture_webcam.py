@@ -27,8 +27,10 @@ def open_camera(index, width=None, height=None):
 
     if not cap.isOpened():
         # Fallback neu DSHOW fail
+        cap.release()
         cap = cv2.VideoCapture(index)
         if not cap.isOpened():
+            cap.release()
             raise RuntimeError(
                 f"Khong mo duoc camera index {index}. Thu doi --camera sang so khac (0, 1, 2...)."
             )
@@ -58,15 +60,22 @@ def build_save_path(output, prefix, index):
     - Neu output la 1 file cu the: lan chup dau tien dung dung ten do,
       cac lan sau tu them so thu tu de khong ghi de.
     """
+    if index < 0:
+        raise ValueError('index must be nonnegative')
     if output.endswith(('/', '\\')) or os.path.isdir(output):
         os.makedirs(output, exist_ok=True)
-        return os.path.join(output, f"{prefix}_{index:03d}.jpg")
-
-    if index == 0:
-        return output
-
+        path = os.path.join(output, f"{prefix}_{index:03d}.jpg")
+        while os.path.exists(path):
+            index += 1
+            path = os.path.join(output, f"{prefix}_{index:03d}.jpg")
+        return path
     root, ext = os.path.splitext(output)
-    return f"{root}_{index:03d}{ext or '.jpg'}"
+    path = output if index == 0 and ext else f"{root}_{index:03d}{ext or '.jpg'}"
+    while os.path.exists(path):
+        index += 1
+        path = f"{root}_{index:03d}{ext or '.jpg'}"
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    return path
 
 
 def main():
@@ -103,7 +112,8 @@ def main():
 
             if key in (ord(' '), ord('c'), ord('C')):
                 path = build_save_path(args.output, args.prefix, index)
-                cv2.imwrite(path, frame)
+                if not cv2.imwrite(path, frame):
+                    raise OSError(f'Cannot save image: {path}')
                 saved_paths.append(path)
                 print(f"Da luu: {path}")
                 index += 1
@@ -119,7 +129,7 @@ def main():
 
     print(f"\nTong cong da luu {len(saved_paths)} anh.")
     print("Vi du chay tiep buoc kiem chung calibration:")
-    print(f"  python verify_calibration.py --calib calibration.pkl --image {saved_paths[0]} --grid")
+    print(f'  python src/verify_calibration.py --calib outputs/calibration_results/calibration_data.pkl --image "{saved_paths[0]}" --grid')
 
 
 if __name__ == '__main__':

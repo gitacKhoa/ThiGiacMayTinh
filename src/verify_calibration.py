@@ -9,46 +9,16 @@ Cach dung:
 """
 
 import argparse
-import pickle
+import sys
+from pathlib import Path
 
 import cv2
 import numpy as np
 
 
-def load_calibration(path):
-    """Doc mtx, dist tu file .pkl hoac .npz, ho tro vai kieu ten khoa pho bien."""
-    if path.endswith('.npz'):
-        data = np.load(path)
-        return np.array(data['mtx']), np.array(data['dist'])
-
-    with open(path, 'rb') as f:
-        data = pickle.load(f)
-
-    mtx = data.get('mtx')
-    if mtx is None:
-        mtx = data.get('camera_matrix')
-    dist = data.get('dist')
-    if dist is None:
-        dist = data.get('distortion_coefficients')
-
-    if mtx is None or dist is None:
-        raise KeyError(
-            f"Khong tim thay 'mtx'/'dist' trong file. Cac khoa hien co: {list(data.keys())}"
-        )
-    return np.array(mtx), np.array(dist)
-
-
-def undistort_image(img, mtx, dist, crop=False):
-    h, w = img.shape[:2]
-    new_mtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), alpha=0 if crop else 1)
-    undistorted = cv2.undistort(img, mtx, dist, None, new_mtx)
-
-    if crop:
-        x, y, rw, rh = roi
-        if rw > 0 and rh > 0:
-            undistorted = undistorted[y:y + rh, x:x + rw]
-
-    return undistorted
+if __package__ in (None, ''):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from src.calibration.undistort import load_calibration_data, undistort_image
 
 
 def draw_grid_overlay(img, spacing=40, color=(0, 0, 255)):
@@ -95,15 +65,18 @@ def main():
     parser.add_argument('--output', default='undistort_check.png', help='Duong dan luu anh so sanh')
     parser.add_argument('--grid', action='store_true', help='Ve luoi de de quan sat duong thang bi cong hay khong')
     parser.add_argument('--crop', action='store_true', help='Cat bo vien den sau khi undistort (alpha=0)')
+    parser.add_argument('--calibration-size', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'))
     args = parser.parse_args()
 
-    mtx, dist = load_calibration(args.calib)
+    calibration = load_calibration_data(args.calib)
+    mtx, dist = calibration['mtx'], calibration['dist']
+    image_size = calibration.get('image_size', args.calibration_size)
 
     img = cv2.imread(args.image)
     if img is None:
         raise FileNotFoundError(f"Khong doc duoc anh: {args.image}")
 
-    undistorted = undistort_image(img, mtx, dist, crop=args.crop)
+    undistorted = undistort_image(img, mtx, dist, crop=args.crop, calibration_size=image_size)
 
     if args.grid:
         img_show = draw_grid_overlay(img)
@@ -112,7 +85,9 @@ def main():
         img_show, undistorted_show = img, undistorted
 
     comparison = make_side_by_side(img_show, undistorted_show)
-    cv2.imwrite(args.output, comparison)
+    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+    if not cv2.imwrite(args.output, comparison):
+        raise OSError(f'Cannot save image: {args.output}')
 
     print(f"Da luu anh so sanh tai: {args.output}")
     print(f"Ma tran noi tai (mtx):\n{mtx}")

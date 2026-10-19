@@ -1,0 +1,97 @@
+{
+  "source_image": "C:\\Users\\khoa\\Desktop\\hocthuat\\KI 1 NAM 4\\THI GIAC MAY TINH\\Project\\CVFP26BCPPRJC039-tolerance-vision\\data\\calibration_test\\homography_test.jpg",
+  "arguments": {
+    "image": "data/calibration_test/homography_test.jpg",
+    "calib": "outputs/calibration_results/calibration_data.pkl",
+    "already_undistorted": false,
+    "calibration_size": [
+      1280,
+      720
+    ],
+    "roi": [
+      100,
+      80,
+      380,
+      480
+    ],
+    "select_roi": false,
+    "method": "hsv",
+    "foreground": "dark",
+    "hsv_lower": [
+      85,
+      80,
+      35
+    ],
+    "hsv_upper": [
+      140,
+      255,
+      255
+    ],
+    "min_area": 100,
+    "blur_size": 5,
+    "morphology_size": 3,
+    "adaptive_block_size": 31,
+    "adaptive_c": 5,
+    "all_components": false,
+    "allow_border": false,
+    "fill_holes": true,
+    "canny_low": 10.0,
+    "canny_high": 30.0,
+    "sigma": 1,
+    "boundary_radius": 3,
+    "min_gradient": 5,
+    "max_offset": 0.75,
+    "square_mm": 29.0,
+    "cols": 8,
+    "rows": 5,
+    "output": "outputs/edge_pipeline_demo"
+  },
+  "source_size": [
+    1280,
+    720
+  ],
+  "crop_roi": [
+    0,
+    0,
+    1279,
+    719
+  ],
+  "alpha": 0.0,
+  "camera_matrix": [
+    [
+      784.7053182178378,
+      0.0,
+      591.5900067427959
+    ],
+    [
+      0.0,
+      922.552439007239,
+      322.0243904105336
+    ],
+    [
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "coordinate_frame": "undistorted.png; x=column, y=row; no ROI offset needed",
+  "image_size": [
+    1279,
+    719
+  ],
+  "roi": [
+    100,
+    80,
+    380,
+    480
+  ],
+  "component_count": 1,
+  "threshold": null,
+  "candidate_count": 1294,
+  "point_count": 1226,
+  "rejected_count": 68,
+  "has_mm": true,
+  "homography_rmse_mm": 0.13145593441565476,
+  "point_order": "unordered; do not use as a contour for area or perimeter",
+  "measurement_status": "edge coordinates only; dimensions, uncertainty and QC not computed"
+}

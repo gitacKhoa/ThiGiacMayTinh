@@ -23,13 +23,13 @@ Sau khi cua so anh hien len:
 """
 
 import argparse
-import os
 import sys
+from pathlib import Path
 
 import cv2
 
-sys.path.insert(0, os.getcwd())  # cho phep chay script tu thu muc goc project
-from src.calibration.undistort import load_calibration, undistort_image
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from src.calibration.undistort import load_calibration_data, undistort_image
 from src.measurement.homography import compute_homography, distance_mm, draw_chessboard
 
 clicked_points = []
@@ -51,14 +51,20 @@ def main():
     parser.add_argument('--cols', type=int, required=True, help='So goc trong theo chieu ngang (giong luc calibrateCamera)')
     parser.add_argument('--rows', type=int, required=True, help='So goc trong theo chieu doc (giong luc calibrateCamera)')
     parser.add_argument('--true-mm', type=float, required=True, help='Kich thuoc that (mm) cua vat se click de kiem tra')
+    parser.add_argument('--calibration-size', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'))
     args = parser.parse_args()
 
-    mtx, dist = load_calibration(args.calib)
+    if args.true_mm <= 0:
+        parser.error('--true-mm must be positive')
+    clicked_points.clear()
+    calibration = load_calibration_data(args.calib)
+    mtx, dist = calibration['mtx'], calibration['dist']
     img = cv2.imread(args.image)
     if img is None:
         raise FileNotFoundError(f"Khong doc duoc anh: {args.image}")
 
-    undistorted = undistort_image(img, mtx, dist, crop=True)
+    undistorted = undistort_image(img, mtx, dist, crop=True,
+                                 calibration_size=calibration.get('image_size', args.calibration_size))
 
     pattern_size = (args.cols, args.rows)
     H, corners = compute_homography(undistorted, args.square_mm, pattern_size)

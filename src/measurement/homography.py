@@ -44,6 +44,11 @@ def chessboard_real_world_points(pattern_size, square_mm):
     tai goc dau tien - cung thu tu voi corners tra ve tu findChessboardCorners
     (quet tung hang, tu trai sang phai).
     """
+    if (len(pattern_size) != 2
+            or any(not isinstance(v, (int, np.integer)) or v < 2 for v in pattern_size)):
+        raise ValueError('pattern_size must be two integers >= 2')
+    if not np.isfinite(square_mm) or square_mm <= 0:
+        raise ValueError('square_mm must be finite and positive')
     cols, rows = pattern_size
     obj_points = np.zeros((cols * rows, 2), dtype=np.float32)
     obj_points[:, :2] = np.mgrid[0:cols, 0:rows].T.reshape(-1, 2) * square_mm
@@ -60,22 +65,37 @@ def compute_homography(image, square_mm, pattern_size):
     chessboard - kiem tra lai --cols/--rows co dung so goc trong khong, hoac
     anh co du sang/net khong.
     """
+    real_pts = chessboard_real_world_points(pattern_size, square_mm)
     found, corners = detect_chessboard(image, pattern_size)
     if not found:
         return None, None
 
-    real_pts = chessboard_real_world_points(pattern_size, square_mm)
     pixel_pts = corners.reshape(-1, 2).astype(np.float32)
 
     H, _ = cv2.findHomography(pixel_pts, real_pts)
+    if H is None or not np.isfinite(H).all() or np.linalg.matrix_rank(H) < 3:
+        raise ValueError('Cannot compute a nondegenerate homography')
     return H, corners
 
 
 def pixel_to_mm(point, H):
     """Quy doi 1 diem pixel (x, y) sang toa do mm tren mat phang vat chuan."""
-    pt = np.array([[point]], dtype=np.float32)  # shape (1,1,2)
-    mm_pt = cv2.perspectiveTransform(pt, H)
-    return mm_pt[0][0]  # array([x_mm, y_mm])
+    return points_to_mm(np.asarray(point, dtype=np.float64).reshape(1, 2), H)[0]
+
+
+def points_to_mm(points, H):
+    """Transform an (N, 2) subpixel cloud; reject points at projective infinity."""
+    points = np.asarray(points, dtype=np.float64)
+    H = np.asarray(H, dtype=np.float64)
+    if points.ndim != 2 or points.shape[1] != 2 or not np.isfinite(points).all():
+        raise ValueError('points must be a finite (N, 2) array')
+    if H.shape != (3, 3) or not np.isfinite(H).all() or np.linalg.matrix_rank(H) < 3:
+        raise ValueError('H must be a finite nonsingular 3x3 matrix')
+    H = H / np.max(np.abs(H))
+    homogeneous = np.column_stack((points, np.ones(len(points)))) @ H.T
+    if np.any(np.abs(homogeneous[:, 2]) < 1e-12):
+        raise ValueError('Homography maps points to infinity')
+    return homogeneous[:, :2] / homogeneous[:, 2, None]
 
 
 def distance_mm(p1, p2, H):

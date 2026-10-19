@@ -3,9 +3,12 @@ import cv2
 import glob
 import os
 import pickle
+import sys
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, '..', '..', '..'))
+sys.path.insert(0, PROJECT_ROOT)
+from src.calibration.undistort import undistort_image
 
 # Camera calibration parameters
 # You can modify these variables as needed
@@ -38,7 +41,8 @@ def calibrate_camera():
     imgpoints = []  # 2D points in image plane
     
     # Get list of calibration images
-    images = glob.glob(CALIBRATION_IMAGES_PATH)
+    images = sorted(glob.glob(CALIBRATION_IMAGES_PATH))
+    image_size = None
     
     if not images:
         print(f"No calibration images found at {CALIBRATION_IMAGES_PATH}")
@@ -53,7 +57,14 @@ def calibrate_camera():
     # Process each calibration image
     for idx, fname in enumerate(images):
         img = cv2.imread(fname)
+        if img is None:
+            raise ValueError(f'Cannot read calibration image: {fname}')
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        current_size = gray.shape[::-1]
+        if image_size is None:
+            image_size = current_size
+        elif current_size != image_size:
+            raise ValueError(f'Mixed calibration image sizes: {current_size} != {image_size}: {fname}')
         
         # Find the chessboard corners
         ret, corners = cv2.findChessboardCorners(gray, CHESSBOARD_SIZE, None)
@@ -86,7 +97,7 @@ def calibrate_camera():
     
     # Calibrate camera
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
-        objpoints, imgpoints, gray.shape[::-1], None, None
+        objpoints, imgpoints, image_size, None, None
     )
     
     # Save calibration results
@@ -95,7 +106,11 @@ def calibrate_camera():
         'distortion_coefficients': dist,
         'rotation_vectors': rvecs,
         'translation_vectors': tvecs,
-        'reprojection_error': ret
+        'reprojection_error': ret,
+        'image_size': image_size,
+        'pattern_size': CHESSBOARD_SIZE,
+        'square_size_mm': SQUARE_SIZE * 10.0,
+        'object_point_unit': 'cm'
     }
     
     with open(os.path.join(OUTPUT_DIRECTORY, 'calibration_data.pkl'), 'wb') as f:
@@ -135,17 +150,10 @@ def undistort_images(mtx, dist):
     
     for idx, fname in enumerate(images):
         img = cv2.imread(fname)
-        h, w = img.shape[:2]
-        
-        # Refine camera matrix based on free scaling parameter
-        newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
-        
-        # Undistort image
-        dst = cv2.undistort(img, mtx, dist, None, newcameramtx)
-        
-        # Crop the image (optional)
-        x, y, w, h = roi
-        dst = dst[y:y+h, x:x+w]
+        if img is None:
+            raise ValueError(f'Cannot read calibration image: {fname}')
+        # These files were validated for equal dimensions in calibrate_camera.
+        dst = undistort_image(img, mtx, dist, crop=True, calibration_size=img.shape[1::-1])
         
         # Save undistorted image
         output_img_path = os.path.join(undistorted_dir, f'undistorted_{os.path.basename(fname)}')
@@ -173,7 +181,7 @@ def calculate_reprojection_error(objpoints, imgpoints, mtx, dist, rvecs, tvecs):
     total_error = 0
     for i in range(len(objpoints)):
         imgpoints2, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], mtx, dist)
-        error = cv2.norm(imgpoints[i], imgpoints2, cv2.NORM_L2) / len(imgpoints2)
+        error = cv2.norm(imgpoints[i], imgpoints2, cv2.NORM_L2) / np.sqrt(len(imgpoints2))
         total_error += error
         print(f"Reprojection error for image {i+1}: {error}")
     
