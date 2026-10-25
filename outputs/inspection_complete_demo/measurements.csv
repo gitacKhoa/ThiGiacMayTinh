@@ -1,0 +1,3 @@
+dimension,value_mm,standard_uncertainty_mm,expanded_uncertainty_mm,coverage_factor,uncertainty_validated,nominal_mm,lower_limit_mm,upper_limit_mm,deviation_mm,status
+length,59.12078797278172,,,2.0,False,,,,,NOT_CONFIGURED
+width,24.717343116884198,,,2.0,False,,,,,NOT_CONFIGURED

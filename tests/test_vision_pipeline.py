@@ -18,6 +18,7 @@ import numpy as np
 from src.calibration.undistort import load_calibration, load_calibration_data, undistort_image, undistort_with_metadata
 from src.edge_detection.subpixel_edge import detect_subpixel_edges
 from src.measurement.homography import points_to_mm
+from src.measurement.homography_profile import create_homography_profile, save_homography_profile
 from src.pipeline import main, process_image, save_result
 from src.segmentation.segment import segment_image
 
@@ -222,7 +223,14 @@ class GeometryAndPipelineTests(unittest.TestCase):
             image_path = directory / 'image.png'
             cv2.imwrite(str(image_path), image)
             output = directory / 'result'
-            main(['--image', str(image_path), '--already-undistorted', '--roi', '10', '10', '140', '100', '--output', str(output)])
+            # The CLI now requires a stored H when not computing a new one.
+            corners = np.mgrid[0:3, 0:3].T.reshape(-1, 1, 2).astype(np.float32) * 20 + 10
+            with patch('src.measurement.homography_profile.compute_homography', return_value=(np.eye(3), corners)):
+                profile = create_homography_profile(image, 20, (3, 3))
+            profile_path = directory / 'homography.json'
+            save_homography_profile(profile_path, profile)
+            main(['--image', str(image_path), '--already-undistorted', '--roi', '10', '10', '140', '100',
+                  '--homography-file', str(profile_path), '--output', str(output)])
             self.assertTrue((output / 'edges.csv').exists())
             calib = directory / 'legacy.npz'
             np.savez(calib, mtx=np.array([[200., 0, 80], [0, 200., 60], [0, 0, 1]]), dist=np.zeros(5))

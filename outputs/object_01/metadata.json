@@ -1,0 +1,127 @@
+{
+  "source_image": "C:\\Users\\khoa\\Desktop\\hocthuat\\KI 1 NAM 4\\THI GIAC MAY TINH\\Project\\CVFP26BCPPRJC039-tolerance-vision\\object_undistorted.png",
+  "arguments": {
+    "image": "object_undistorted.png",
+    "calib": null,
+    "already_undistorted": true,
+    "calibration_size": null,
+    "roi": null,
+    "select_roi": true,
+    "method": "otsu",
+    "foreground": "dark",
+    "hsv_lower": null,
+    "hsv_upper": null,
+    "min_area": 100,
+    "blur_size": 5,
+    "morphology_size": 3,
+    "adaptive_block_size": 31,
+    "adaptive_c": 5,
+    "all_components": false,
+    "allow_border": false,
+    "fill_holes": false,
+    "canny_low": 50,
+    "canny_high": 150,
+    "sigma": 1,
+    "boundary_radius": 3,
+    "min_gradient": 5,
+    "max_offset": 0.75,
+    "homography_mode": "reuse",
+    "homography_file": "outputs/homography.json",
+    "square_mm": null,
+    "cols": 8,
+    "rows": 5,
+    "output": "outputs/object_01"
+  },
+  "homography_mode": "reuse",
+  "homography_file": "C:\\Users\\khoa\\Desktop\\hocthuat\\KI 1 NAM 4\\THI GIAC MAY TINH\\Project\\CVFP26BCPPRJC039-tolerance-vision\\outputs\\homography.json",
+  "homography_reference": {
+    "version": 1,
+    "units": "mm",
+    "coordinate_frame": "undistorted_cropped_image_pixels_to_plane_mm",
+    "created_at": "2026-10-22T09:49:57.016737+00:00",
+    "H": [
+      [
+        -0.3443373919299761,
+        0.0032671688393982336,
+        326.8302051014507
+      ],
+      [
+        -0.005126160569817408,
+        -0.2973252817261222,
+        175.57717530272123
+      ],
+      [
+        2.3760433851758684e-05,
+        -2.9044548099475255e-05,
+        1.0
+      ]
+    ],
+    "image_size": [
+      1279,
+      719
+    ],
+    "square_mm": 29.0,
+    "pattern_size": [
+      8,
+      5
+    ],
+    "fit_rmse_mm": 0.13919198416060227,
+    "preprocessing": {
+      "source_size": [
+        1280,
+        720
+      ],
+      "crop_roi": [
+        0,
+        0,
+        1279,
+        719
+      ],
+      "alpha": 0.0,
+      "camera_matrix": [
+        [
+          784.7053182178378,
+          0.0,
+          591.5900067427959
+        ],
+        [
+          0.0,
+          922.552439007239,
+          322.0243904105336
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "distortion": [
+        -0.38384198360438654,
+        0.12452807346382802,
+        0.0032680887194950045,
+        0.0012567814229060032,
+        0.0007997863127674541
+      ]
+    }
+  },
+  "coordinate_frame": "undistorted.png; x=column, y=row; no ROI offset needed",
+  "image_size": [
+    1279,
+    719
+  ],
+  "roi": [
+    492,
+    295,
+    256,
+    153
+  ],
+  "component_count": 1,
+  "threshold": 78.0,
+  "candidate_count": 618,
+  "point_count": 588,
+  "rejected_count": 30,
+  "has_mm": true,
+  "homography_rmse_mm": null,
+  "point_order": "unordered; do not use as a contour for area or perimeter",
+  "measurement_status": "edge coordinates only; dimensions, uncertainty and QC not computed"
+}

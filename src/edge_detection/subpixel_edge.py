@@ -77,6 +77,25 @@ def detect_subpixel_edges(image, mask=None, *, roi=None, canny_low=50,
     candidate_count = len(xs)
     strong = magnitude[ys, xs] > max(min_gradient, np.finfo(float).eps)
     xs, ys = xs[strong], ys[strong]
+    # Canny uses rounded uint8 smoothing while refinement uses float64. Its
+    # seed can land on the adjacent pixel of a step/plateau, especially on the
+    # top/left sides of a rectangle. Recenter on a stronger neighbouring pixel
+    # along the dominant normal axis before requiring a genuine local peak.
+    horizontal = np.abs(gx[ys, xs]) >= np.abs(gy[ys, xs])
+    dx, dy = horizontal.astype(int), (~horizontal).astype(int)
+    profiles = np.column_stack((magnitude[ys - dy, xs - dx], magnitude[ys, xs],
+                                magnitude[ys + dy, xs + dx]))
+    # Prefer the original seed on exact ties.
+    best = np.argmax(profiles, axis=1) - 1
+    best[profiles[:, 1] >= profiles.max(axis=1)] = 0
+    xs, ys = xs + best * dx, ys + best * dy
+    inside = (xs >= x + 2) & (xs < x + w - 2) & (ys >= y + 2) & (ys < y + h - 2)
+    xs, ys = xs[inside], ys[inside]
+    if len(xs):
+        unique = np.unique(np.column_stack((ys, xs)), axis=0)
+        ys, xs = unique[:, 0], unique[:, 1]
+        permitted = allowed[ys, xs]
+        xs, ys = xs[permitted], ys[permitted]
     center = magnitude[ys, xs]
     nx, ny = gx[ys, xs] / center, gy[ys, xs] / center
     minus = _bilinear(magnitude, xs - nx, ys - ny)

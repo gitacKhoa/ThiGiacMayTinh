@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "roi": [
+    492,
+    295,
+    256,
+    153
+  ],
+  "segmentation": {},
+  "edges": {},
+  "measurement": {
+    "kind": "bounding-box",
+    "max_fit_rmse_mm": 0.25,
+    "min_inlier_fraction": 0.8,
+    "min_points": 24,
+    "min_side_coverage": 0.6,
+    "max_circle_gap_deg": 90.0
+  },
+  "uncertainty": {
+    "standard_mm": 0.0,
+    "relative_standard": 0.0,
+    "coverage_factor": 2.0,
+    "validated": false
+  },
+  "tolerances": {}
+}

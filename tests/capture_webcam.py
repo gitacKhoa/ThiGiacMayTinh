@@ -6,6 +6,13 @@ Mo webcam, xem truoc, va chup anh luu lai de dung cho verify_calibration.py
 Cach dung:
     python tests/capture_webcam.py --output test.jpg
     python tests/capture_webcam.py --output data/calibration_test/ --prefix calib --width 1280 --height 720
+    python tests/capture_webcam.py --calib outputs/calibration_results/calibration_data.pkl --calibration-size 1280 720 --width 1280 --height 720 --homography-mode compute --square-mm 29 --output undistorted.jpg
+
+Neu dung --calib, anh hien thi va anh luu la anh da undistort, co the dua
+truc tiep vao buoc homography. Khong dung --calib neu dang chup anh goc cho
+buoc calibration.
+Voi --calib: compute tinh/luu H khi chup anh co ban co; reuse (mac dinh)
+nap H cu, khong can ban co. Camera va mat phang do phai giu nguyen.
 
 Phim tat khi cua so preview dang mo:
     SPACE hoac C   -> chup va luu anh
@@ -15,7 +22,18 @@ Phim tat khi cua so preview dang mo:
 import argparse
 import os
 import platform
+import sys
+from pathlib import Path
+
 import cv2
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from src.calibration.undistort import load_calibration_data, undistort_with_metadata
+from src.measurement.homography_profile import (
+    add_homography_arguments, create_homography_profile, homography_for_image,
+    load_homography_profile, resolve_homography_mode, save_homography_profile,
+    undistortion_geometry,
+)
 
 
 def open_camera(index, width=None, height=None):
@@ -78,14 +96,39 @@ def build_save_path(output, prefix, index):
     return path
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description='Mo webcam va chup anh de dung cho pipeline do luong.')
     parser.add_argument('--output', default='captured.jpg', help='Duong dan file luu, hoac thu muc neu chup nhieu anh')
     parser.add_argument('--prefix', default='capture', help='Tien to ten file khi luu nhieu anh vao 1 thu muc')
     parser.add_argument('--camera', type=int, default=0, help='Chi so camera (0, 1, 2...)')
     parser.add_argument('--width', type=int, default=None, help='Do phan giai chieu rong mong muon')
     parser.add_argument('--height', type=int, default=None, help='Do phan giai chieu cao mong muon')
-    args = parser.parse_args()
+    parser.add_argument('--calib', help='File calibration PKL/NPZ; bat buoc de luu anh da undistort')
+    parser.add_argument('--calibration-size', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'),
+                        help='Kich thuoc calibration (width height), dung cho file cu khong co image_size')
+    add_homography_arguments(parser)
+    args = parser.parse_args(argv)
+    homography_mode = resolve_homography_mode(parser, args, default='reuse' if args.calib else None)
+    if homography_mode is not None and not args.calib:
+        parser.error('Webcam homography requires --calib to undistort frames first')
+
+    calibration = None
+    calibration_size = None
+    profile = None
+    if args.calib:
+        calibration = load_calibration_data(args.calib)
+        calibration_size = calibration.get('image_size', args.calibration_size)
+        if calibration_size is None:
+            parser.error('Calibration cu khong co image_size; hay them --calibration-size WIDTH HEIGHT')
+        if args.calibration_size is not None and tuple(calibration_size) != tuple(args.calibration_size):
+            parser.error('--calibration-size conflicts with calibration metadata')
+    if homography_mode == 'reuse':
+        try:
+            profile = load_homography_profile(args.homography_file)
+        except (ValueError, OSError) as exc:
+            parser.exit(1, f'Homography error: {exc}\n')
+        print(f'Da nap homography: {args.homography_file}; khong can ban co.')
+        print('Giu nguyen camera, tieu cu, mat phang do, do phan giai va undistort/crop.')
 
     cap = open_camera(args.camera, args.width, args.height)
     saved_paths = []
@@ -100,7 +143,16 @@ def main():
                 print("Khong doc duoc frame tu camera.")
                 break
 
-            preview = frame.copy()
+            frame_for_save = frame
+            preprocessing = None
+            if calibration is not None:
+                geometry = undistort_with_metadata(
+                    frame, calibration['mtx'], calibration['dist'], calibration_size=calibration_size
+                )
+                frame_for_save = geometry.image
+                preprocessing = undistortion_geometry(geometry, calibration['dist'])
+
+            preview = frame_for_save.copy()
             cv2.putText(preview, "SPACE: chup | Q: thoat", (10, 25),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
             if saved_paths:
@@ -111,14 +163,28 @@ def main():
             key = cv2.waitKey(1) & 0xFF
 
             if key in (ord(' '), ord('c'), ord('C')):
+                if homography_mode == 'compute':
+                    try:
+                        profile = create_homography_profile(
+                            frame_for_save, args.square_mm, (args.cols, args.rows), preprocessing=preprocessing)
+                    except ValueError as exc:
+                        print(f'Homography error: {exc}. Chua luu anh/H; hay chup lai.')
+                        continue
+                elif homography_mode == 'reuse':
+                    homography_for_image(profile, frame_for_save, preprocessing=preprocessing)
                 path = build_save_path(args.output, args.prefix, index)
-                if not cv2.imwrite(path, frame):
+                if not cv2.imwrite(path, frame_for_save):
                     raise OSError(f'Cannot save image: {path}')
+                if homography_mode == 'compute':
+                    save_homography_profile(args.homography_file, profile)
+                    print(f'Da luu homography: {args.homography_file} (RMSE {profile["fit_rmse_mm"]:.4f} mm)')
                 saved_paths.append(path)
                 print(f"Da luu: {path}")
                 index += 1
             elif key in (ord('q'), ord('Q'), 27):  # 27 = ESC
                 break
+    except (ValueError, OSError, cv2.error) as exc:
+        parser.exit(1, f'Capture error: {exc}\n')
     finally:
         cap.release()
         cv2.destroyAllWindows()
@@ -128,8 +194,15 @@ def main():
         return
 
     print(f"\nTong cong da luu {len(saved_paths)} anh.")
-    print("Vi du chay tiep buoc kiem chung calibration:")
-    print(f'  python src/verify_calibration.py --calib outputs/calibration_results/calibration_data.pkl --image "{saved_paths[0]}" --grid')
+    if calibration is None:
+        print("Anh da luu la anh goc. Hay undistort truoc khi chay homography.")
+        print("Vi du chay tiep buoc kiem chung calibration:")
+        print(f'  python src/verify_calibration.py --calib outputs/calibration_results/calibration_data.pkl --image "{saved_paths[0]}" --grid')
+    else:
+        print("Anh da luu la anh da undistort; co the dung truc tiep cho homography.")
+        print('Chay pipeline de tu dong doi toa do bien sang mm:')
+        print(f'  python -m src.pipeline --image "{saved_paths[0]}" --already-undistorted '
+              f'--homography-mode reuse --homography-file "{args.homography_file}" --select-roi')
 
 
 if __name__ == '__main__':

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "roi": null,
+  "segmentation": {"method": "otsu", "foreground": "dark"},
+  "edges": {"canny_low": 50, "canny_high": 150},
+  "measurement": {"kind": "circle", "max_fit_rmse_mm": 0.25, "min_inlier_fraction": 0.8},
+  "uncertainty": {"standard_mm": 0.0, "relative_standard": 0.0, "coverage_factor": 2.0, "validated": false},
+  "tolerances": {}
+}
