@@ -156,7 +156,8 @@ class GeometryAndPipelineTests(unittest.TestCase):
                 np.testing.assert_equal(load_calibration(path)[0], camera)
                 image = np.zeros((120, 160, 3), np.uint8)
                 result = undistort_with_metadata(image, data['mtx'], data['dist'], calibration_size=data['image_size'])
-                matrix, roi = cv2.getOptimalNewCameraMatrix(camera, distortion, (160, 120), 0)
+                matrix, roi = cv2.getOptimalNewCameraMatrix(camera, distortion, (160, 120), 0,
+                                                           (160, 120), centerPrincipalPoint=True)
                 x, y, w, h = roi
                 self.assertEqual(result.image.shape[:2], (h, w))
                 np.testing.assert_allclose(result.camera_matrix[:2, 2], matrix[:2, 2] - [x, y])
@@ -229,7 +230,8 @@ class GeometryAndPipelineTests(unittest.TestCase):
                 profile = create_homography_profile(image, 20, (3, 3))
             profile_path = directory / 'homography.json'
             save_homography_profile(profile_path, profile)
-            main(['--image', str(image_path), '--already-undistorted', '--roi', '10', '10', '140', '100',
+            main(['--image', str(image_path), '--already-undistorted', '--allow-unverified-geometry',
+                  '--roi', '10', '10', '140', '100',
                   '--homography-file', str(profile_path), '--output', str(output)])
             self.assertTrue((output / 'edges.csv').exists())
             calib = directory / 'legacy.npz'

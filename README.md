@@ -4,7 +4,7 @@ Pipeline Python/OpenCV cho ảnh vật trên mặt phẳng chuẩn:
 
 ```text
 Ảnh gốc + calibration
-  → undistort (alpha=0, crop một lần, không resize)
+  → undistort (alpha=0, cùng hệ số phóng hai trục, crop một lần, không resize)
   → chọn ROI vật trên ảnh undistort
   → segmentation → mask toàn ảnh
   → Canny trên mức xám + giới hạn quanh biên mask
@@ -21,6 +21,19 @@ Pipeline Python/OpenCV cho ảnh vật trên mặt phẳng chuẩn:
 Giao diện chưa triển khai. Xem [hướng dẫn API và cấu hình](docs/inspection-api.md).
 [Báo cáo rà soát cũ](docs/code-review-flow.md) là tài liệu lịch sử, không mô tả đầy đủ trạng thái hiện tại.
 
+## Quan trọng: sửa kéo giãn ảnh undistort
+
+Đã thay cách tạo camera matrix đầu ra để giữ tỷ lệ `fx/fy` của calibration;
+không còn co ngang/dọc độc lập để lấp đầy khung. Crop chỉ cắt ảnh, không kéo ảnh về 1280×720.
+Chế độ bỏ viền đen có thể zoom/cắt trường nhìn nhiều hơn trước; đây là đổi trường nhìn, không phải kéo giãn.
+Undistort không chỉnh phối cảnh: bàn cờ nghiêng vẫn có thể không hiện thành các ô vuông đều nhau.
+
+**Ảnh/H/ROI cũ không dùng lẫn ảnh mới.** Không undistort ảnh cũ thêm lần nữa.
+Chụp lại bàn cờ để tính H mới, sau đó chụp lại vật và chọn ROI mới.
+Hướng dẫn đầy đủ, gồm ba lệnh chụp bàn cờ → chụp vật → đo, ở [bản sửa undistort](docs/undistortion-fix.md).
+Ảnh đã undistort mới đi kèm `<tên ảnh>.geometry.json`; giữ hai file cùng nhau.
+CLI tự kiểm tra hash ảnh và hình học trước khi dùng lại H, không chỉ so kích thước ảnh.
+
 ## Cài đặt
 
 ```powershell
@@ -31,20 +44,20 @@ Các module xử lý chỉ sử dụng NumPy, OpenCV và thư viện chuẩn; kh
 Môi trường kiểm tra: Python 3.11.9, OpenCV 4.11.0, NumPy 2.2.4.
 Chạy các lệnh dưới đây từ thư mục gốc dự án.
 
-## Chạy ngay ảnh chìa khóa hiện có
+## Đo ảnh chìa khóa sau khi chụp lại bằng quy trình mới
 
 ```powershell
 python -m src.pipeline `
-  --image object_undistorted.png --already-undistorted `
-  --homography-mode reuse --homography-file outputs/homography.json `
-  --roi 492 295 256 153 --measurement bounding-box `
+  --image object_undistorted_v2.png --already-undistorted `
+  --homography-mode reuse --homography-file outputs/homography_v2.json `
+  --select-roi --measurement bounding-box `
   --output outputs/key_measurement `
   --save-config outputs/key_measurement/inspection_config.json
 ```
 
-ROI này chỉ dành cho ảnh hiện tại; ảnh khác dùng `--select-roi`.
+Chọn lại ROI trong ảnh mới; không dùng ROI `(492, 295, 256, 153)` của ảnh cũ.
 `bounding-box` đo hình chữ nhật bao nhỏ nhất trong **hệ mm**, không ép chìa khóa thành vật hình chữ nhật.
-Kết quả thử hiện tại khoảng 59,121 × 24,717 mm; chưa đối chiếu kích thước thực bằng dụng cụ chuẩn.
+Kết quả thử trên ảnh/H cũ từng là 59,121 × 24,717 mm; đây không phải kết quả đo mới hoặc số tham chiếu đã kiểm chứng.
 Không cung cấp dung sai thì QC là `NOT_CONFIGURED`, không tự kết luận đạt.
 
 ## Ví dụ cũ: trích biên vật màu xanh
@@ -69,6 +82,7 @@ Thông số 29 mm theo cấu hình bàn cờ hiện có; cần đo cạnh ô in 
 Đã kiểm tra 15 ảnh calibration đều có kích thước 1280×720. File calibration cũ chưa có
 `image_size`, vì vậy phải truyền `--calibration-size`. File calibration tạo mới sẽ lưu trường này.
 Ảnh có kích thước khác calibration sẽ bị từ chối; không tự co giãn ma trận camera.
+ROI mẫu trên chỉ có ý nghĩa với hình học cũ; nếu chạy lại phải chọn ROI phù hợp ảnh undistort mới.
 
 Kết quả ghi nhận ở phiên bản cũ: 1.226 điểm, RMSE khớp bàn cờ khoảng 0,1315 mm.
 Đây là sai số khớp các góc bàn cờ, **không phải sai số đo vật hoặc độ không đảm bảo**.
@@ -84,7 +98,7 @@ python -m src.pipeline `
   --image captured.jpg `
   --calib outputs/calibration_results/calibration_data.pkl `
   --calibration-size 1280 720 `
-  --homography-mode reuse --homography-file outputs/homography.json `
+  --homography-mode reuse --homography-file outputs/homography_v2.json `
   --select-roi --method otsu --foreground dark --measurement rectangle `
   --output outputs/my_object
 ```
@@ -110,7 +124,11 @@ Tránh đưa bàn cờ hoặc vật khác vào ROI. Đối tượng chạm mép 
   Thiếu/hỏng file hoặc kích thước ảnh không khớp thì báo lỗi, không tự chuyển sang pixel.
 - Không chỉ định chế độ: có `--square-mm` thì tính mới (tương thích lệnh cũ),
   không có thì nạp lại. Mặc định dùng `outputs/homography.json`.
-- Ảnh đã undistort: dùng `--already-undistorted` thay `--calib` để tránh sửa méo hai lần.
+- Ảnh đã undistort: dùng `--already-undistorted` thay `--calib` để tránh sửa méo hai lần;
+  mặc định phải có sidecar `.geometry.json` do công cụ chụp/verify/pipeline mới lưu.
+- Ảnh từ công cụ ngoài không có sidecar: chỉ khi bạn đã tự xác minh ảnh/H cùng hình học mới dùng
+  `--allow-unverified-geometry`. Cờ này không sửa ảnh cũ, không chuyển H cũ sang hình học mới,
+  và không bỏ qua sidecar bị sửa/hỏng hoặc hai metadata đã biết nhưng không khớp.
 
 ## Tính homography một lần, dùng lại nhiều lần
 
@@ -123,8 +141,9 @@ Chương trình không tự phát hiện được camera hay mặt phẳng đo �
 File JSON lưu H 3×3, đơn vị mm, kích thước ảnh, hệ tọa độ, số góc trong,
 kích thước ô, RMSE khớp bàn cờ, thời điểm tính và thông tin undistort/crop nếu có.
 Khi cả hai lần đều xử lý ảnh gốc bằng calibration, chương trình kiểm tra thêm độ tương thích
-ma trận camera, distortion, crop và kích thước ảnh nguồn. Với ảnh undistort sẵn không có metadata,
-chỉ kiểm tra được kích thước ảnh và sẽ nhắc người dùng giữ nguyên cách xử lý.
+ma trận camera gốc/đầu ra, distortion, crop, model undistort và kích thước ảnh nguồn.
+Với ảnh lưu sẵn, metadata được đọc từ sidecar và đối chiếu hash file ảnh; thiếu metadata mặc định bị từ chối.
+Chỉ khi chủ động bật chế độ unverified mới hạ xuống kiểm tra kích thước kèm cảnh báo.
 Module homography không đọc calibration `.pkl`; calibration chỉ phục vụ bước undistort trước đó.
 
 Có thể tạo H ngay lúc chụp webcam (không cần có vật để segmentation):
@@ -134,8 +153,8 @@ python tests/capture_webcam.py `
   --calib outputs/calibration_results/calibration_data.pkl `
   --calibration-size 1280 720 --width 1280 --height 720 `
   --homography-mode compute --square-mm 29 --cols 8 --rows 5 `
-  --homography-file outputs/homography.json `
-  --output board_undistorted.png
+  --homography-file outputs/homography_v2.json `
+  --output board_undistorted_v2.png
 ```
 
 Nhấn Space/C để chụp: nếu không thấy bàn cờ, báo lỗi và cho chụp lại; không lưu ảnh/H mới.
@@ -147,8 +166,8 @@ Script chụp chỉ lưu ảnh và chuẩn bị H; pipeline trích biên, đổi
 
 ```powershell
 python -m src.pipeline `
-  --image object_undistorted.png --already-undistorted `
-  --homography-mode reuse --homography-file outputs/homography.json `
+  --image object_undistorted_v2.png --already-undistorted `
+  --homography-mode reuse --homography-file outputs/homography_v2.json `
   --select-roi --measurement bounding-box --output outputs/my_object
 ```
 
@@ -163,6 +182,7 @@ Mỗi lần chạy ghi các file sau trong thư mục `--output` (chạy lại c
 | File | Nội dung |
 | --- | --- |
 | `undistorted.png` | Ảnh dùng chung cho toàn bộ phép tính tọa độ |
+| `undistorted.png.geometry.json` | Khi biết hình học: camera matrix gốc/đầu ra, crop, model, distortion và hash ảnh |
 | `mask.png` | Mask nhị phân uint8 0/255, cùng kích thước ảnh |
 | `edges.png` | Pixel ứng viên đã vượt kiểm tra tinh chỉnh |
 | `overlay.png` | Biên sub-pixel vẽ lên ảnh để kiểm tra |
@@ -193,8 +213,8 @@ Ví dụ **minh họa**, chỉ dùng số danh nghĩa/dung sai phù hợp bản 
 
 ```powershell
 python -m src.pipeline `
-  --image object_undistorted.png --already-undistorted `
-  --homography-mode reuse --homography-file outputs/homography.json `
+  --image object_undistorted_v2.png --already-undistorted `
+  --homography-mode reuse --homography-file outputs/homography_v2.json `
   --select-roi --measurement bounding-box `
   --tolerance length 60 -0.5 0.5 --tolerance width 25 -0.3 0.3 `
   --output outputs/check_tolerance
@@ -216,8 +236,8 @@ hoặc [bounding-box](config/bounding-box.example.json) qua `--config`;
 
 ```powershell
 python -m src.pipeline `
-  --image object_undistorted.png --already-undistorted `
-  --homography-file outputs/homography.json `
+  --image object_undistorted_v2.png --already-undistorted `
+  --homography-file outputs/homography_v2.json `
   --config outputs/key_measurement/inspection_config.json `
   --output outputs/key_repeat
 ```

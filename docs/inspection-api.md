@@ -23,14 +23,16 @@ Lõi xử lý không phụ thuộc PyQt/Tkinter/web, không gọi input/print/c�
 ```python
 import cv2
 from src.configuration import load_config
+from src.calibration.image_geometry import load_image_geometry
 from src.inspection import inspect_image, prepare_image, InspectionCancelled
 from src.measurement.homography_profile import load_homography_profile, homography_for_image
 from src.reporting import inspection_to_dict, render_inspection, save_inspection
 
 # I/O do adapter quản lý. Ảnh ví dụ đã được undistort.
-input_image = cv2.imread("object_undistorted.png")
+input_image = cv2.imread("object_undistorted_v2.png")
 prepared = prepare_image(input_image)
-profile = load_homography_profile("outputs/homography.json")
+prepared.preprocessing = load_image_geometry("object_undistorted_v2.png", input_image)
+profile = load_homography_profile("outputs/homography_v2.json")
 H = homography_for_image(profile, prepared.image, preprocessing=prepared.preprocessing)
 config = load_config("outputs/key_measurement/inspection_config.json")
 
@@ -40,7 +42,7 @@ payload = inspection_to_dict(result)       # dict có thể JSON hóa, để hi�
 preview_bgr = render_inspection(prepared.image, result)  # ndarray, không imshow
 # Chỉ gọi khi người dùng bấm Lưu:
 save_inspection("outputs/gui_run", prepared.image, result, config=config,
-                metadata={"homography_reference": profile})
+                metadata={"homography_reference": profile, "preprocessing": prepared.preprocessing})
 ```
 
 Nếu ảnh gốc: nạp calibration qua `load_calibration_data`, rồi truyền dictionary vào
@@ -50,6 +52,9 @@ Không undistort lần hai. Không tự resize/crop ảnh sau khi chuẩn bị.
 Muốn tính H mới, gọi `create_homography_profile(prepared.image, square_mm, pattern_size,
 preprocessing=prepared.preprocessing)` rồi lưu profile qua adapter; không thấy bàn cờ sẽ báo lỗi.
 Module homography không đọc `.pkl`.
+Ảnh lưu mới có sidecar `.geometry.json` chứa hash và hình học. Chỉ đọc sidecar ở adapter;
+API thuần không tự đọc file. `homography_for_image` mặc định từ chối metadata thiếu/không khớp.
+`allow_unverified=True` chỉ dành cho cặp ảnh/H ngoài đã tự xác minh, không bỏ qua mismatch đã biết.
 
 ### Hợp đồng cho UI
 
@@ -157,4 +162,6 @@ nên adapter chỉ thông báo thành công sau khi hàm trả về. File config
 Homography chỉ đúng mặt phẳng đã hiệu chuẩn. Không thể tự phát hiện camera di chuyển hoặc vật
 có bề dày khiến biên nằm lệch mặt phẳng. Một ảnh có hình nhìn bị kéo theo trục vẫn có thể quy đổi đúng
 nếu H và ảnh dùng đúng cùng hình học, nhưng không được thay cách undistort/crop rồi dùng H cũ.
-Triển khai này giữ nguyên hình học undistort hiện hành, không âm thầm resize về 1280×720.
+Hình học mới dùng `centerPrincipalPoint=True`, giữ hệ số phóng hai trục bằng nhau và giữ `fx/fy` gốc.
+Không âm thầm resize về 1280×720. H/ROI của thuật toán cũ phải được tính/chọn lại;
+xem [quy trình chuyển đổi](undistortion-fix.md). Không lấy metadata của H gán cho ảnh chưa xác minh.

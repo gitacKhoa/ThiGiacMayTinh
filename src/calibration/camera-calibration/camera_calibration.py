@@ -8,7 +8,9 @@ import sys
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, '..', '..', '..'))
 sys.path.insert(0, PROJECT_ROOT)
-from src.calibration.undistort import undistort_image
+from src.calibration.undistort import undistort_with_metadata
+from src.calibration.image_geometry import save_undistorted_image
+from src.measurement.homography_profile import undistortion_geometry
 
 # Camera calibration parameters
 # You can modify these variables as needed
@@ -153,11 +155,11 @@ def undistort_images(mtx, dist):
         if img is None:
             raise ValueError(f'Cannot read calibration image: {fname}')
         # These files were validated for equal dimensions in calibrate_camera.
-        dst = undistort_image(img, mtx, dist, crop=True, calibration_size=img.shape[1::-1])
+        geometry = undistort_with_metadata(img, mtx, dist, crop=True, calibration_size=img.shape[1::-1])
         
         # Save undistorted image
         output_img_path = os.path.join(undistorted_dir, f'undistorted_{os.path.basename(fname)}')
-        cv2.imwrite(output_img_path, dst)
+        save_undistorted_image(output_img_path, geometry.image, undistortion_geometry(geometry, dist))
         
         print(f"Undistorted image {idx+1}/{len(images)}: {fname}")
     

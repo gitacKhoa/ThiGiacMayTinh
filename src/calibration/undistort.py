@@ -12,6 +12,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+UNDISTORTION_MODEL = 'centered_uniform_scale_v2'
+
 
 def load_calibration_data(path):
     """Load trusted local PKL/NPZ, normalize aliases and retain metadata."""
@@ -76,6 +78,8 @@ class UndistortionResult:
     crop_roi: tuple
     source_size: tuple
     alpha: float
+    source_camera_matrix: np.ndarray
+    model: str = UNDISTORTION_MODEL
 
 
 def undistort_with_metadata(img, mtx, dist, crop=True, *, calibration_size=None):
@@ -96,7 +100,15 @@ def undistort_with_metadata(img, mtx, dist, crop=True, *, calibration_size=None)
     elif _validate_size(calibration_size) != (w, h):
         raise ValueError(f'Image size {(w, h)} differs from calibration size {tuple(calibration_size)}')
     alpha = 0.0 if crop else 1.0
-    new_mtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), alpha)
+    # The default OpenCV branch optimizes fx/fy independently to fill the canvas.
+    # Centering the principal point selects ONE scale for both original focal
+    # lengths, preserving fx/fy. Cropping only translates the principal point.
+    new_mtx, roi = cv2.getOptimalNewCameraMatrix(
+        mtx, dist, (w, h), alpha, (w, h), centerPrincipalPoint=True)
+    if (not np.isfinite(new_mtx).all() or min(new_mtx[0, 0], new_mtx[1, 1]) <= 0
+            or not np.isclose(new_mtx[0, 0] / mtx[0, 0], new_mtx[1, 1] / mtx[1, 1],
+                              rtol=1e-12, atol=1e-12)):
+        raise ValueError('Calibration cannot produce aspect-preserving undistortion')
     corrected = cv2.undistort(img, mtx, dist, None, new_mtx)
     crop_roi = (0, 0, w, h)
     if crop:
@@ -108,13 +120,14 @@ def undistort_with_metadata(img, mtx, dist, crop=True, *, calibration_size=None)
         new_mtx[0, 2] -= x
         new_mtx[1, 2] -= y
         crop_roi = (x, y, rw, rh)
-    return UndistortionResult(corrected, new_mtx, crop_roi, (w, h), alpha)
+    return UndistortionResult(corrected, new_mtx, crop_roi, (w, h), alpha, mtx.copy())
 
 
 def undistort_image(img, mtx, dist, crop=True, *, calibration_size=None):
     """
     Sua meo anh bang mtx/dist.
     crop=True (mac dinh): cat bo vien den sinh ra sau undistort (alpha=0).
-    crop=False: giu nguyen toan bo anh goc, se co vien den cong o goc/canh.
+    crop=False: truong nhin rong hon (alpha=1), co the co vien den.
+    Hai truc dung cung he so phong; khong resize ve kich thuoc co dinh sau crop.
     """
     return undistort_with_metadata(img, mtx, dist, crop, calibration_size=calibration_size).image

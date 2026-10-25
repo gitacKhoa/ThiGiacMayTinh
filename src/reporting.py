@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 
 from src.configuration import config_to_dict
+from src.calibration.image_geometry import geometry_sidecar_path, save_undistorted_image
 from src.edge_detection.subpixel_edge import draw_subpixel_edges
 from src.measurement.homography import points_to_mm
 from src.segmentation.segment import as_gray
@@ -34,7 +35,16 @@ def save_result(output, image, result, metadata=None):
     """Compatibility export for the original point-cloud-only API."""
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
-    previews = {'undistorted.png': image, 'mask.png': result.segmentation.mask,
+    image_path = output / 'undistorted.png'
+    geometry = (metadata or {}).get('preprocessing')
+    if geometry is not None:
+        save_undistorted_image(image_path, image, geometry)
+    else:
+        if not cv2.imwrite(str(image_path), image):
+            raise OSError(f'Cannot write {image_path}')
+        # A rewritten unverified image must not inherit a previous run's sidecar.
+        geometry_sidecar_path(image_path).unlink(missing_ok=True)
+    previews = {'mask.png': result.segmentation.mask,
                 'edges.png': result.edges.edge_map, 'overlay.png': draw_subpixel_edges(image, result.edges.points)}
     for name, preview in previews.items():
         if not cv2.imwrite(str(output / name), preview):

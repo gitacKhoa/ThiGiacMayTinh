@@ -29,6 +29,7 @@ import cv2
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.calibration.undistort import load_calibration_data, undistort_with_metadata
+from src.calibration.image_geometry import save_undistorted_image
 from src.measurement.homography_profile import (
     add_homography_arguments, create_homography_profile, homography_for_image,
     load_homography_profile, resolve_homography_mode, save_homography_profile,
@@ -173,7 +174,9 @@ def main(argv=None):
                 elif homography_mode == 'reuse':
                     homography_for_image(profile, frame_for_save, preprocessing=preprocessing)
                 path = build_save_path(args.output, args.prefix, index)
-                if not cv2.imwrite(path, frame_for_save):
+                if preprocessing is not None:
+                    save_undistorted_image(path, frame_for_save, preprocessing)
+                elif not cv2.imwrite(path, frame_for_save):
                     raise OSError(f'Cannot save image: {path}')
                 if homography_mode == 'compute':
                     save_homography_profile(args.homography_file, profile)
@@ -200,6 +203,7 @@ def main(argv=None):
         print(f'  python src/verify_calibration.py --calib outputs/calibration_results/calibration_data.pkl --image "{saved_paths[0]}" --grid')
     else:
         print("Anh da luu la anh da undistort; co the dung truc tiep cho homography.")
+        print('Giu file .geometry.json canh anh; anh/H cu can chup va tinh lai sau khi doi undistort.')
         print('Chay pipeline de tu dong doi toa do bien sang mm:')
         print(f'  python -m src.pipeline --image "{saved_paths[0]}" --already-undistorted '
               f'--homography-mode reuse --homography-file "{args.homography_file}" --select-roi')

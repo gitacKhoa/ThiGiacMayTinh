@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 
 from src.calibration.undistort import load_calibration_data
+from src.calibration.image_geometry import load_image_geometry
 from src.configuration import load_config, save_config
 from src.inspection import InspectionConfig, inspect_image, prepare_image
 from src.measurement.homography import compute_homography  # Backward-compatible import.
@@ -29,6 +30,8 @@ def build_parser():
     calibration_group = parser.add_mutually_exclusive_group(required=True)
     calibration_group.add_argument('--calib', help='Calibration PKL/NPZ for a RAW input image')
     calibration_group.add_argument('--already-undistorted', action='store_true')
+    parser.add_argument('--allow-unverified-geometry', action='store_true',
+                        help='Explicitly accept externally verified image/H without geometry metadata; never bypass a known mismatch')
     parser.add_argument('--calibration-size', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'))
     parser.add_argument('--config', help='Versioned JSON inspection settings; explicit CLI flags override it')
     parser.add_argument('--save-config', help='Save effective inspection settings as JSON after a successful run')
@@ -120,8 +123,14 @@ def main(argv=None):
             raise ValueError(f'Cannot read image: {args.image}')
         calibration = load_calibration_data(args.calib) if args.calib else None
         prepared = prepare_image(image, calibration=calibration, calibration_size=args.calibration_size)
+        if args.already_undistorted:
+            prepared.preprocessing = load_image_geometry(args.image, image,
+                                                        allow_missing=args.allow_unverified_geometry)
+            if prepared.preprocessing is None:
+                print('WARNING: image geometry is unverified; do not mix legacy images/H with new captures.')
         image = prepared.image
         metadata = {'source_image': str(Path(args.image).resolve()), 'arguments': vars(args)}
+        metadata['preprocessing'] = prepared.preprocessing
         if prepared.preprocessing is not None:
             metadata.update(prepared.preprocessing)
         if mode == 'compute':
@@ -132,7 +141,8 @@ def main(argv=None):
             print(f'Saved homography: {args.homography_file}')
         else:
             profile = load_homography_profile(args.homography_file)
-            H = homography_for_image(profile, image, preprocessing=prepared.preprocessing)
+            H = homography_for_image(profile, image, preprocessing=prepared.preprocessing,
+                                     allow_unverified=args.allow_unverified_geometry)
             print(f'Loaded homography: {args.homography_file} (no board detection)')
         metadata.update(homography_mode=mode, homography_file=str(Path(args.homography_file).resolve()),
                         homography_reference=profile)

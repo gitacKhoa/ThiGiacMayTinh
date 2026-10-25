@@ -18,6 +18,7 @@ from src.measurement.homography_profile import (
     save_homography_profile,
 )
 from src.pipeline import main, process_image
+from src.calibration.image_geometry import load_image_geometry
 
 
 def scene(board=True):
@@ -40,7 +41,7 @@ class HomographyReuseTests(unittest.TestCase):
             cv2.imwrite(str(target), scene(False))
             profile_path = root / 'homography.json'
             output = root / 'result'
-            common = ['--already-undistorted', '--roi', '330', '40', '180', '210',
+            common = ['--already-undistorted', '--allow-unverified-geometry', '--roi', '330', '40', '180', '210',
                       '--homography-file', str(profile_path), '--output', str(output)]
             main(['--image', str(reference), '--homography-mode', 'compute', '--square-mm', '15', *common])
             stored_bytes = profile_path.read_bytes()
@@ -132,6 +133,7 @@ class HomographyReuseTests(unittest.TestCase):
                 self.assertIn('Khong phat hien ban co', messages.getvalue())
                 self.assertTrue(output.is_file())
                 saved = load_homography_profile(profile_path)
+                self.assertEqual(load_image_geometry(output, cv2.imread(str(output))), saved['preprocessing'])
                 self.assertLess(saved['fit_rmse_mm'], 0.05)
                 # Only one capture saved: the boardless attempt was rejected.
                 self.assertFalse(output.with_name('capture_001.png').exists())

@@ -10,6 +10,7 @@ import warnings
 
 import numpy as np
 
+from src.calibration.image_geometry import validate_image_geometry
 from src.measurement.homography import (
     chessboard_real_world_points, compute_homography, points_to_mm,
 )
@@ -46,6 +47,7 @@ def undistortion_geometry(result, distortion):
     """Describe the pixel frame, not a path to a calibration file."""
     return dict(source_size=list(result.source_size), crop_roi=list(result.crop_roi),
                 alpha=result.alpha, camera_matrix=result.camera_matrix.tolist(),
+                model=result.model, source_camera_matrix=result.source_camera_matrix.tolist(),
                 distortion=np.asarray(distortion).reshape(-1).tolist())
 
 
@@ -66,6 +68,8 @@ def _validate_profile(profile):
             raise ValueError('Invalid homography fit RMSE')
         geometry = profile['preprocessing']
         if geometry is not None:
+            if 'model' in geometry:
+                validate_image_geometry(geometry, profile['image_size'])
             for key, shape in (('source_size', (2,)), ('crop_roi', (4,)), ('camera_matrix', (3, 3))):
                 value = np.asarray(geometry[key], dtype=float)
                 if value.shape != shape or not np.isfinite(value).all():
@@ -113,17 +117,26 @@ def load_homography_profile(path):
     return profile
 
 
-def homography_for_image(profile, image, *, preprocessing=None):
+def homography_for_image(profile, image, *, preprocessing=None, allow_unverified=False):
     H = _validate_profile(profile)
     if list(profile['image_size']) != [image.shape[1], image.shape[0]]:
         raise ValueError('Homography image size mismatch; keep resolution and undistort/crop unchanged')
     stored = profile['preprocessing']
     if stored is not None and preprocessing is not None:
+        if stored.get('model') != preprocessing.get('model'):
+            raise ValueError('Homography preprocessing mismatch: undistortion model changed; recompute H from a NEW board capture')
         for key in ('source_size', 'crop_roi', 'alpha', 'camera_matrix', 'distortion'):
             old, new = np.asarray(stored[key]), np.asarray(preprocessing[key])
             if old.shape != new.shape or not np.allclose(old, new, rtol=1e-10, atol=1e-10):
                 raise ValueError(f'Homography preprocessing mismatch: {key}; recompute H')
+        if 'model' in preprocessing:
+            validate_image_geometry(preprocessing, image.shape[1::-1])
+            if not np.allclose(stored['source_camera_matrix'], preprocessing['source_camera_matrix'], rtol=1e-10, atol=1e-10):
+                raise ValueError('Homography preprocessing mismatch: source camera matrix; recompute H')
     else:
+        if not allow_unverified:
+            raise ValueError('Cannot verify image/H undistortion geometry. Recapture or regenerate image and H; '
+                             'externally verified legacy pairs require explicit allow_unverified.')
         warnings.warn('Only image size can be checked for externally undistorted images; '
                       'keep the same undistortion, crop and pixel coordinates.', UserWarning, stacklevel=2)
     return H

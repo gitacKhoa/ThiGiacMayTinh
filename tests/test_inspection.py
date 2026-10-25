@@ -59,7 +59,7 @@ class InspectionTests(unittest.TestCase):
             save_config(config_path, InspectionConfig(roi=(30, 20, 280, 180),
                 measurement=MeasurementOptions(kind='circle')))
             effective_path = folder / 'effective.json'
-            args = ['--image', str(image_path), '--already-undistorted',
+            args = ['--image', str(image_path), '--already-undistorted', '--allow-unverified-geometry',
                     '--homography-mode', 'reuse', '--homography-file', str(profile_path),
                     '--config', str(config_path), '--measurement', 'rectangle',
                     '--standard-uncertainty-mm', '0.03', '--uncertainty-validated',
